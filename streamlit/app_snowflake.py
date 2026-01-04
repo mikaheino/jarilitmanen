@@ -73,6 +73,8 @@ def load_data(_session):
         return pandas_df
     except Exception as e:
         st.error(f"Error loading data: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 def main():
@@ -82,7 +84,13 @@ def main():
     st.markdown('<div class="sub-header">ML-Powered Career Statistics & Availability Analysis</div>', unsafe_allow_html=True)
     
     # Initialize session
-    session = init_session()
+    try:
+        session = init_session()
+    except Exception as e:
+        st.error(f"Error initializing session: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        st.stop()
     
     # Load data
     df = load_data(session)
@@ -95,23 +103,29 @@ def main():
     st.sidebar.header("Filters")
     
     # Club filter
-    clubs = ['All'] + sorted(df['CLUB'].unique().tolist())
+    clubs = ['All'] + sorted(df['CLUB'].dropna().unique().tolist())
     selected_club = st.sidebar.selectbox("Select Club", clubs)
     
     # Competition filter
-    competitions = ['All'] + sorted(df['COMPETITION'].unique().tolist())
+    competitions = ['All'] + sorted(df['COMPETITION'].dropna().unique().tolist())
     selected_competition = st.sidebar.selectbox("Select Competition", competitions)
     
-    # Year range filter
-    min_year = int(df['SEASON_START_YEAR'].min())
-    max_year = int(df['SEASON_START_YEAR'].max())
+    # Year range filter - handle potential NULL values
+    year_col = df['SEASON_START_YEAR'].dropna()
+    if len(year_col) > 0:
+        min_year = int(year_col.min())
+        max_year = int(year_col.max())
+    else:
+        min_year = 1990
+        max_year = 2011
+    
     year_range = st.sidebar.slider("Season Range", min_year, max_year, (min_year, max_year))
     
-    # Filter data
+    # Filter data - ensure proper type conversion
     filtered_df = df[
-        (df['SEASON_START_YEAR'] >= year_range[0]) &
-        (df['SEASON_START_YEAR'] <= year_range[1])
-    ]
+        (df['SEASON_START_YEAR'].fillna(0) >= int(year_range[0])) &
+        (df['SEASON_START_YEAR'].fillna(0) <= int(year_range[1]))
+    ].copy()
     
     if selected_club != 'All':
         filtered_df = filtered_df[filtered_df['CLUB'] == selected_club]
@@ -126,11 +140,14 @@ def main():
     with col1:
         st.metric("Total Seasons", len(filtered_df))
     with col2:
-        st.metric("Total Appearances", int(filtered_df['APPEARANCES'].sum()))
+        appearances_sum = filtered_df['APPEARANCES'].fillna(0).sum()
+        st.metric("Total Appearances", int(appearances_sum))
     with col3:
-        st.metric("Total Minutes", f"{int(filtered_df['MINUTES'].sum()):,}")
+        minutes_sum = filtered_df['MINUTES'].fillna(0).sum()
+        st.metric("Total Minutes", f"{int(minutes_sum):,}")
     with col4:
-        st.metric("Avg Points/Game", f"{filtered_df['PPG'].mean():.2f}")
+        ppg_mean = filtered_df['PPG'].fillna(0).mean()
+        st.metric("Avg Points/Game", f"{ppg_mean:.2f}")
     
     # Chart 1: Minutes Ratio Over Time
     st.header("📈 Career Timeline: Minutes Ratio")
@@ -146,8 +163,8 @@ def main():
         if selected_competition != 'All':
             snowpark_df = snowpark_df.filter(col("COMPETITION") == selected_competition)
         snowpark_df = snowpark_df.filter(
-            (col("SEASON_START_YEAR") >= year_range[0]) &
-            (col("SEASON_START_YEAR") <= year_range[1])
+            (col("SEASON_START_YEAR") >= int(year_range[0])) &
+            (col("SEASON_START_YEAR") <= int(year_range[1]))
         )
         
         # Convert to pandas for plotting
@@ -191,9 +208,9 @@ def main():
     # Chart 2: Appearances by Club
     st.header("🏆 Appearances by Club")
     club_stats = filtered_df.groupby('CLUB').agg({
-        'APPEARANCES': 'sum',
-        'MINUTES': 'sum',
-        'PPG': 'mean'
+        'APPEARANCES': lambda x: x.fillna(0).sum(),
+        'MINUTES': lambda x: x.fillna(0).sum(),
+        'PPG': lambda x: x.fillna(0).mean()
     }).reset_index().sort_values('APPEARANCES', ascending=False)
     
     import plotly.express as px
@@ -209,9 +226,9 @@ def main():
     # Chart 3: Performance by Competition
     st.header("🎯 Performance by Competition")
     comp_stats = filtered_df.groupby('COMPETITION').agg({
-        'MINUTES_RATIO': 'mean',
-        'PPG': 'mean',
-        'APPEARANCES': 'sum'
+        'MINUTES_RATIO': lambda x: x.fillna(0).mean(),
+        'PPG': lambda x: x.fillna(0).mean(),
+        'APPEARANCES': lambda x: x.fillna(0).sum()
     }).reset_index().sort_values('MINUTES_RATIO', ascending=False)
     
     fig3 = px.scatter(
@@ -244,10 +261,18 @@ def main():
     
     # Highlight anomalies in the data
     st.subheader("📉 Low Availability Periods")
-    low_availability = filtered_df[filtered_df['MINUTES_RATIO'] < 0.4].copy()
+    minutes_ratio_col = filtered_df['MINUTES_RATIO'].fillna(1.0)
+    low_availability = filtered_df[minutes_ratio_col < 0.4].copy()
     
     if len(low_availability) > 0:
-        anomaly_df = low_availability[['SEASON', 'CLUB', 'COMPETITION', 'MINUTES_RATIO', 'PPG']].sort_values('SEASON_START_YEAR')
+        # Ensure SEASON_START_YEAR exists and handle sorting
+        if 'SEASON_START_YEAR' in low_availability.columns:
+            sort_col = 'SEASON_START_YEAR'
+        else:
+            sort_col = 'SEASON'
+        anomaly_df = low_availability[['SEASON', 'CLUB', 'COMPETITION', 'MINUTES_RATIO', 'PPG']].copy()
+        if sort_col in anomaly_df.columns:
+            anomaly_df = anomaly_df.sort_values(sort_col)
         st.dataframe(anomaly_df, use_container_width=True)
         
         st.markdown("""
@@ -259,12 +284,17 @@ def main():
     
     # Data Table
     st.header("📋 Detailed Data")
-    st.dataframe(
-        filtered_df[['SEASON', 'CLUB', 'COMPETITION', 'APPEARANCES', 'MINUTES', 'PPG', 
-                    'MINUTES_RATIO', 'SEASON_START_YEAR']].sort_values('SEASON_START_YEAR'),
-        use_container_width=True,
-        height=400
-    )
+    display_cols = ['SEASON', 'CLUB', 'COMPETITION', 'APPEARANCES', 'MINUTES', 'PPG', 'MINUTES_RATIO']
+    if 'SEASON_START_YEAR' in filtered_df.columns:
+        display_cols.append('SEASON_START_YEAR')
+        sort_col = 'SEASON_START_YEAR'
+    else:
+        sort_col = 'SEASON'
+    
+    display_df = filtered_df[display_cols].copy()
+    if sort_col in display_df.columns:
+        display_df = display_df.sort_values(sort_col)
+    st.dataframe(display_df, use_container_width=True, height=400)
     
     # Footer
     st.markdown("---")

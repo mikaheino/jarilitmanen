@@ -1,0 +1,19 @@
+-- Step 20: Create database & schema
+CREATE DATABASE IF NOT EXISTS LITMANEN;
+CREATE SCHEMA IF NOT EXISTS LITMANEN.RAW;
+CREATE SCHEMA IF NOT EXISTS LITMANEN.FEATURES;
+
+-- Step 21: Create stage for CSV
+CREATE OR REPLACE STAGE LITMANEN.RAW.STAGE_CSV;
+
+-- Step 22: Create raw table
+CREATE OR REPLACE TABLE LITMANEN.RAW.PLAYER_SEASON_DATA (
+  season STRING,
+  competition STRING,
+  club STRING,
+  appearances INT,
+  starts INT,
+  ppg NUMBER(10,2),
+  minutes INT
+);
+

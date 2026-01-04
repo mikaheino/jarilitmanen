@@ -19,20 +19,43 @@ ML project analyzing Jari Litmanen's football career data using Snowflake, Pytho
 └── .devcontainer/                 # Dev container configuration
 ```
 
-## Setup
+## Quick Start
 
-1. **Install dependencies:**
+### Prerequisites
+- Snowflake account with database creation privileges
+- Python 3.11+ installed
+- Git installed
+
+### Setup Steps
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/mikaheino/jarilitmanen.git
+   cd jarilitmanen
+   ```
+
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Configure Snowflake connection:**
-   - Copy `.env.example` to `.env` (if available)
-   - Fill in your Snowflake credentials
+3. **Configure Snowflake connection:**
+   - **Option A:** Using Snowflake MCP Server (if configured in Cursor)
+   - **Option B:** Create `.env` file with your Snowflake credentials:
+     ```
+     SNOWFLAKE_ACCOUNT=your_account
+     SNOWFLAKE_USER=your_user
+     SNOWFLAKE_PASSWORD=your_password
+     SNOWFLAKE_WAREHOUSE=your_warehouse
+     SNOWFLAKE_DATABASE=LITMANEN
+     SNOWFLAKE_SCHEMA=RAW
+     SNOWFLAKE_ROLE=ACCOUNTADMIN
+     ```
 
-3. **Create Snowflake objects:**
+4. **Create Snowflake objects:**
+   
+   **Using Snowflake CLI:**
    ```bash
-   # Run SQL scripts in order:
    # 1. Create database and schema
    snowflake-sql < snowflake/01_create_database_schema.sql
    
@@ -42,6 +65,43 @@ ML project analyzing Jari Litmanen's football career data using Snowflake, Pytho
    # 3. Create features view
    snowflake-sql < snowflake/03_create_features.sql
    ```
+   
+   **Using Snowflake Web UI (Snowsight):**
+   - Open Snowsight SQL worksheet
+   - Copy and paste each SQL script content
+   - Execute in order: 01 → 02 → 03
+
+5. **Verify setup:**
+   ```sql
+   SELECT COUNT(*) FROM LITMANEN.RAW.PLAYER_SEASON_DATA;
+   -- Expected: 58 records
+   
+   SELECT * FROM LITMANEN.FEATURES.LITMANEN_FEATURES LIMIT 5;
+   -- Should show data with calculated features
+   ```
+
+## Testing
+
+For detailed step-by-step testing instructions, see **[TESTING.md](TESTING.md)**.
+
+### Quick Test
+
+```sql
+-- Verify data loaded
+SELECT COUNT(*) as total_records FROM LITMANEN.RAW.PLAYER_SEASON_DATA;
+
+-- Test feature view
+SELECT 
+  season,
+  club,
+  competition,
+  appearance_ratio,
+  minutes_ratio,
+  season_start_year
+FROM LITMANEN.FEATURES.LITMANEN_FEATURES
+ORDER BY season_start_year DESC
+LIMIT 10;
+```
 
 ## Snowflake Database Structure
 
@@ -76,6 +136,11 @@ The feature view calculates:
 - [ ] Train ML model (Step 40-43)
 - [ ] Build Streamlit app (Step 50-52)
 - [ ] Create presentation materials (Step 60-61)
+
+## Documentation
+
+- **[TESTING.md](TESTING.md)** - Comprehensive testing guide with step-by-step instructions
+- **[plan_and_progress.md](plan_and_progress.md)** - Project progress tracking
 
 ## References
 

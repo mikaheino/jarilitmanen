@@ -12,13 +12,17 @@ ML project analyzing Jari Litmanen's football career data using Snowflake, Pytho
 │   ├── 01_create_database_schema.sql
 │   ├── 02_load_data.sql
 │   ├── 02_load_data_direct.sql
-│   └── 03_create_features.sql
+│   ├── 03_create_features.sql
+│   ├── 04_create_streamlit_app.sql
+│   └── 05_upload_streamlit_app.sql
 ├── ml/                            # Machine learning scripts
 │   ├── train_model.py
 │   └── README.md
 ├── streamlit/                     # Streamlit application
-│   ├── app.py
-│   └── README.md
+│   ├── app.py                     # Local Streamlit app
+│   ├── app_snowflake.py          # Snowflake native app
+│   ├── README.md
+│   └── DEPLOY_TO_SNOWFLAKE.md
 ├── presentation/                  # Presentation materials
 │   ├── PRESENTATION.md
 │   └── DEMO_SCRIPT.md
@@ -126,18 +130,32 @@ See [ml/README.md](ml/README.md) for details.
 
 ## Running the Streamlit App
 
+### Option 1: Local Streamlit App
+
 ```bash
-# Launch the dashboard
+# Launch the dashboard locally
 streamlit run streamlit/app.py
 ```
 
-This will:
-- Connect to Snowflake
-- Load career data
-- Display interactive charts and filters
-- Show anomaly detection section
+### Option 2: Snowflake Native Streamlit App (Recommended)
 
-See [streamlit/README.md](streamlit/README.md) for details.
+Deploy the app to run directly inside Snowflake:
+
+1. **Create Streamlit app in Snowflake:**
+   ```bash
+   snowflake-sql < snowflake/04_create_streamlit_app.sql
+   ```
+
+2. **Upload app file:**
+   ```bash
+   PUT file://streamlit/app_snowflake.py @LITMANEN.FEATURES.STREAMLIT_STAGE/app_snowflake.py
+   ```
+
+3. **Access in Snowsight:**
+   - Navigate to **Apps** > **LITMANEN_CAREER_ANALYSIS**
+
+See [streamlit/DEPLOY_TO_SNOWFLAKE.md](streamlit/DEPLOY_TO_SNOWFLAKE.md) for detailed deployment instructions.
+See [streamlit/README.md](streamlit/README.md) for local app details.
 
 ## Snowflake Database Structure
 
@@ -179,6 +197,7 @@ The feature view calculates:
 - **[plan_and_progress.md](plan_and_progress.md)** - Project progress tracking
 - **[ml/README.md](ml/README.md)** - ML model training guide
 - **[streamlit/README.md](streamlit/README.md)** - Streamlit app guide
+- **[streamlit/DEPLOY_TO_SNOWFLAKE.md](streamlit/DEPLOY_TO_SNOWFLAKE.md)** - Snowflake native deployment guide
 - **[presentation/PRESENTATION.md](presentation/PRESENTATION.md)** - Presentation slides and guide
 - **[presentation/DEMO_SCRIPT.md](presentation/DEMO_SCRIPT.md)** - Live demo script
 

@@ -14,8 +14,14 @@ ML project analyzing Jari Litmanen's football career data using Snowflake, Pytho
 │   ├── 02_load_data_direct.sql
 │   └── 03_create_features.sql
 ├── ml/                            # Machine learning scripts
-│   └── load_data.py
+│   ├── train_model.py
+│   └── README.md
 ├── streamlit/                     # Streamlit application
+│   ├── app.py
+│   └── README.md
+├── presentation/                  # Presentation materials
+│   ├── PRESENTATION.md
+│   └── DEMO_SCRIPT.md
 └── .devcontainer/                 # Dev container configuration
 ```
 
@@ -103,6 +109,36 @@ ORDER BY season_start_year DESC
 LIMIT 10;
 ```
 
+## Running the ML Model
+
+```bash
+# Train the model
+python ml/train_model.py
+```
+
+This will:
+- Pull features from Snowflake
+- Define target variable (low availability)
+- Train Random Forest and Logistic Regression models
+- Save the best model and feature importance
+
+See [ml/README.md](ml/README.md) for details.
+
+## Running the Streamlit App
+
+```bash
+# Launch the dashboard
+streamlit run streamlit/app.py
+```
+
+This will:
+- Connect to Snowflake
+- Load career data
+- Display interactive charts and filters
+- Show anomaly detection section
+
+See [streamlit/README.md](streamlit/README.md) for details.
+
 ## Snowflake Database Structure
 
 - **Database:** `LITMANEN`
@@ -133,14 +169,18 @@ The feature view calculates:
 
 ## Next Steps
 
-- [ ] Train ML model (Step 40-43)
-- [ ] Build Streamlit app (Step 50-52)
-- [ ] Create presentation materials (Step 60-61)
+- [x] Train ML model (Step 40-43) ✅
+- [x] Build Streamlit app (Step 50-52) ✅
+- [x] Create presentation materials (Step 60-61) ✅
 
 ## Documentation
 
 - **[TESTING.md](TESTING.md)** - Comprehensive testing guide with step-by-step instructions
 - **[plan_and_progress.md](plan_and_progress.md)** - Project progress tracking
+- **[ml/README.md](ml/README.md)** - ML model training guide
+- **[streamlit/README.md](streamlit/README.md)** - Streamlit app guide
+- **[presentation/PRESENTATION.md](presentation/PRESENTATION.md)** - Presentation slides and guide
+- **[presentation/DEMO_SCRIPT.md](presentation/DEMO_SCRIPT.md)** - Live demo script
 
 ## References
 

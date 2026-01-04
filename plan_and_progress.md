@@ -23,6 +23,10 @@ Create complete ML project solution in Snowflake and store all code in GitHub re
 - [x] Created LITMANEN_FEATURES view with calculated ratios and season sorting
 - [x] Created all project files (SQL scripts, Python scripts, requirements.txt, README.md)
 - [x] Committed and pushed code to GitHub repository mikaheino/jarilitmanen
+- [x] Trained ML model (Step 40-43): train_model.py with Random Forest and Logistic Regression
+- [x] Built Streamlit app (Step 50-52): Interactive dashboard with charts, filters, and anomaly detection
+- [x] Created presentation materials (Step 60-61): PRESENTATION.md and DEMO_SCRIPT.md
+- [x] Added comprehensive documentation: TESTING.md, ml/README.md, streamlit/README.md
 
 ## Notes
 - The curl command syntax is now correct - Authorization header fixed

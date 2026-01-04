@@ -1,0 +1,34 @@
+step_id,section,task,command_or_file,notes
+00,Project setup,Create repo structure,"folders: data/, snowflake/, ml/, streamlit/, .devcontainer/",Keeps demo reproducible; works great in devcontainer.
+01,Project setup,Add .env (not committed),".env: SNOWFLAKE_ACCOUNT, USER, PASSWORD or KEYPAIR, WAREHOUSE, DATABASE, SCHEMA, ROLE",Store secrets locally; add .env to .gitignore.
+02,Project setup,Create requirements,"requirements.txt: snowflake-snowpark-python, snowflake-connector-python, pandas, scikit-learn, streamlit, python-dotenv",Pinned versions recommended for demos.
+10,Data,Place CSV datasets,data/litmanen_career_dataset_full.csv (and/or per-image CSVs),Use the dataset we built earlier; keep raw sources separate from derived tables.
+11,Data,Optional: add unusual injuries list,data/litmanen_unusual_injuries.csv,For storytelling + optional labels/features.
+20,Snowflake,Create database & schema,create database if not exists litmanen; create schema if not exists litmanen.raw;,Use separate schemas for raw/features/models if you want.
+21,Snowflake,Create stage for CSV,create or replace stage litmanen.raw.stage_csv;,Upload file(s) via Snowsight or PUT.
+22,Snowflake,Create raw table,"create or replace table litmanen.raw.player_season_data (
+season string, club string, league string,
+player_matches int, player_minutes int,
+max_league_matches int, max_minutes int
+);",Types can be adjusted; keep column names lowercase if you prefer.
+23,Snowflake,Load CSV to table,"copy into litmanen.raw.player_season_data
+from @litmanen.raw.stage_csv/litmanen_career_dataset_full.csv
+file_format=(type=csv field_delimiter=',' skip_header=1);","If your stage path differs, update accordingly."
+30,Features,Create feature view,"create or replace view litmanen.features.litmanen_features as
+select
+  season, club, league,
+  player_matches, player_minutes,
+  max_league_matches, max_minutes,
+  player_matches*1.0/nullif(max_league_matches,0) as workload_index,
+  player_minutes*1.0/nullif(max_minutes,0) as minutes_ratio
+from litmanen.raw.player_season_data;",Create schema litmanen.features first.
+31,Features,Optional: season sorting key,add derived season_start_year int,Helps ordering when seasons are like '03/04'.
+40,ML (Python),Pull features with Snowpark,ml/train_model.py: snowpark session -> read litmanen_features -> pandas,Use python-dotenv to read .env.
+41,ML (Python),Define simple target,e.g. label_low_availability = minutes_ratio < 0.4,You can also label using injury table for narrative.
+42,ML (Python),Train baseline model,sklearn logistic regression / random forest,This is a demo—baseline is fine.
+43,ML (Python),Persist model artifact,"write model.pkl to stage or local, optionally register as Snowflake model","For demo, local is simplest; stage is better for sharing."
+50,Streamlit,Build Streamlit app,streamlit/app.py: connect -> query features -> charts + narrative,Plot minutes_ratio/workload by season; highlight anomalies.
+51,Streamlit,Add what-ML-cannot-predict section,Use unusual injuries as 'outliers' slide/story,Makes the Litmanen angle fun and memorable.
+52,Streamlit,Run locally in devcontainer,streamlit run streamlit/app.py,Enable localhost links in Cursor.
+60,Presentation,Story arc slides,1) Data source 2) Pipeline 3) Features 4) Model 5) App 6) Lessons,Tie to Litmanen’s availability + weird injuries.
+61,Presentation,Live demo checklist,show databases; query features; run streamlit; change threshold,Keep a fallback screenshot deck.

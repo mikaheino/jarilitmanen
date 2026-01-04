@@ -4,8 +4,8 @@ Runs directly inside Snowflake using Snowflake's Streamlit support
 """
 import streamlit as st
 from snowflake.snowpark import Session
-from snowflake.snowpark.functions import col
 import pandas as pd
+import numpy as np
 
 # Page configuration
 st.set_page_config(
@@ -39,22 +39,26 @@ st.markdown("""
 def init_session():
     """Initialize Snowflake session using Streamlit's connection"""
     try:
-        # Snowflake Streamlit apps automatically provide a session
         conn = st.connection("snowflake")
         return conn.session()
     except Exception as e:
         st.error(f"Error connecting to Snowflake: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         st.stop()
 
 @st.cache_data(ttl=300)
 def load_data(_session):
     """Load data from Snowflake using Snowpark"""
     try:
-        # Query the features view using Snowpark DataFrame
         df = _session.table("LITMANEN.FEATURES.LITMANEN_FEATURES")
-        
-        # Convert to pandas for easier manipulation
         pandas_df = df.to_pandas()
+        
+        # Convert all numeric columns explicitly
+        numeric_cols = ['APPEARANCES', 'STARTS', 'MINUTES', 'PPG', 'APPEARANCE_RATIO', 'MINUTES_RATIO', 'SEASON_START_YEAR']
+        for col_name in numeric_cols:
+            if col_name in pandas_df.columns:
+                pandas_df[col_name] = pd.to_numeric(pandas_df[col_name], errors='coerce')
         
         return pandas_df
     except Exception as e:
@@ -62,6 +66,24 @@ def load_data(_session):
         import traceback
         st.code(traceback.format_exc())
         return None
+
+def safe_int(value):
+    """Safely convert value to int"""
+    try:
+        if pd.isna(value):
+            return 0
+        return int(float(value))
+    except:
+        return 0
+
+def safe_float(value):
+    """Safely convert value to float"""
+    try:
+        if pd.isna(value):
+            return 0.0
+        return float(value)
+    except:
+        return 0.0
 
 def main():
     """Main Streamlit app"""
@@ -85,77 +107,95 @@ def main():
         st.error("Unable to load data. Please check your Snowflake connection.")
         st.stop()
     
-    # Ensure all columns are properly typed
-    numeric_cols = ['APPEARANCES', 'STARTS', 'MINUTES', 'PPG', 'APPEARANCE_RATIO', 'MINUTES_RATIO', 'SEASON_START_YEAR']
-    for col_name in numeric_cols:
-        if col_name in df.columns:
-            df[col_name] = pd.to_numeric(df[col_name], errors='coerce')
-    
     # Sidebar
     st.sidebar.header("Filters")
     
-    # Club filter - handle NULL values
-    club_values = df['CLUB'].dropna().unique()
-    clubs = ['All'] + sorted([str(c) for c in club_values])
-    selected_club = st.sidebar.selectbox("Select Club", clubs)
+    # Club filter
+    try:
+        club_values = [str(c) for c in df['CLUB'].dropna().unique() if c is not None]
+        clubs = ['All'] + sorted(club_values)
+        selected_club = st.sidebar.selectbox("Select Club", clubs)
+    except Exception as e:
+        st.sidebar.error(f"Error loading clubs: {e}")
+        selected_club = 'All'
+        clubs = ['All']
     
-    # Competition filter - handle NULL values
-    comp_values = df['COMPETITION'].dropna().unique()
-    competitions = ['All'] + sorted([str(c) for c in comp_values])
-    selected_competition = st.sidebar.selectbox("Select Competition", competitions)
+    # Competition filter
+    try:
+        comp_values = [str(c) for c in df['COMPETITION'].dropna().unique() if c is not None]
+        competitions = ['All'] + sorted(comp_values)
+        selected_competition = st.sidebar.selectbox("Select Competition", competitions)
+    except Exception as e:
+        st.sidebar.error(f"Error loading competitions: {e}")
+        selected_competition = 'All'
+        competitions = ['All']
     
-    # Year range filter - handle potential NULL values
-    year_col = df['SEASON_START_YEAR'].dropna()
-    if len(year_col) > 0:
-        try:
-            min_year = int(float(year_col.min()))
-            max_year = int(float(year_col.max()))
-        except:
+    # Year range filter
+    try:
+        year_col = df['SEASON_START_YEAR'].dropna()
+        if len(year_col) > 0:
+            min_year = safe_int(year_col.min())
+            max_year = safe_int(year_col.max())
+        else:
             min_year = 1990
             max_year = 2011
-    else:
-        min_year = 1990
-        max_year = 2011
+        
+        year_range = st.sidebar.slider("Season Range", min_year, max_year, (min_year, max_year))
+        
+        # Extract year values safely
+        if isinstance(year_range, (list, tuple)) and len(year_range) >= 2:
+            year_min = safe_int(year_range[0])
+            year_max = safe_int(year_range[1])
+        else:
+            year_min = safe_int(year_range)
+            year_max = safe_int(year_range)
+    except Exception as e:
+        st.sidebar.error(f"Error setting year range: {e}")
+        year_min = 1990
+        year_max = 2011
+        year_range = (1990, 2011)
     
-    year_range = st.sidebar.slider("Season Range", min_year, max_year, (min_year, max_year))
-    
-    # Ensure year_range values are integers
-    year_min = int(year_range[0]) if isinstance(year_range, (list, tuple)) else int(year_range)
-    year_max = int(year_range[1]) if isinstance(year_range, (list, tuple)) else int(year_range)
-    
-    # Filter data - ensure proper type conversion
-    year_col_filter = pd.to_numeric(df['SEASON_START_YEAR'], errors='coerce').fillna(0)
-    filtered_df = df[
-        (year_col_filter >= year_min) &
-        (year_col_filter <= year_max)
-    ].copy()
-    
-    if selected_club != 'All':
-        filtered_df = filtered_df[filtered_df['CLUB'] == selected_club]
-    
-    if selected_competition != 'All':
-        filtered_df = filtered_df[filtered_df['COMPETITION'] == selected_competition]
+    # Filter data
+    try:
+        year_col_filter = pd.to_numeric(df['SEASON_START_YEAR'], errors='coerce').fillna(0)
+        filtered_df = df[
+            (year_col_filter >= year_min) &
+            (year_col_filter <= year_max)
+        ].copy()
+        
+        if selected_club != 'All':
+            filtered_df = filtered_df[filtered_df['CLUB'] == selected_club]
+        
+        if selected_competition != 'All':
+            filtered_df = filtered_df[filtered_df['COMPETITION'] == selected_competition]
+    except Exception as e:
+        st.error(f"Error filtering data: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        filtered_df = df.copy()
     
     # Key Metrics
     st.header("📊 Key Metrics")
     col1, col2, col3, col4 = st.columns(4)
     
-    with col1:
-        st.metric("Total Seasons", len(filtered_df))
-    with col2:
-        appearances_sum = pd.to_numeric(filtered_df['APPEARANCES'], errors='coerce').fillna(0).sum()
-        st.metric("Total Appearances", int(appearances_sum))
-    with col3:
-        minutes_sum = pd.to_numeric(filtered_df['MINUTES'], errors='coerce').fillna(0).sum()
-        st.metric("Total Minutes", f"{int(minutes_sum):,}")
-    with col4:
-        ppg_mean = pd.to_numeric(filtered_df['PPG'], errors='coerce').fillna(0).mean()
-        st.metric("Avg Points/Game", f"{ppg_mean:.2f}")
+    try:
+        with col1:
+            st.metric("Total Seasons", len(filtered_df))
+        with col2:
+            appearances_sum = pd.to_numeric(filtered_df['APPEARANCES'], errors='coerce').fillna(0).sum()
+            st.metric("Total Appearances", safe_int(appearances_sum))
+        with col3:
+            minutes_sum = pd.to_numeric(filtered_df['MINUTES'], errors='coerce').fillna(0).sum()
+            st.metric("Total Minutes", f"{safe_int(minutes_sum):,}")
+        with col4:
+            ppg_mean = pd.to_numeric(filtered_df['PPG'], errors='coerce').fillna(0).mean()
+            st.metric("Avg Points/Game", f"{ppg_mean:.2f}")
+    except Exception as e:
+        st.error(f"Error calculating metrics: {e}")
     
     # Chart 1: Minutes Ratio Over Time
     st.header("📈 Career Timeline: Minutes Ratio")
     
-    # Use pandas directly for simplicity and reliability
     try:
         import plotly.express as px
         
@@ -180,7 +220,7 @@ def main():
         else:
             st.warning("No data available for the selected filters.")
     except Exception as e:
-        st.error(f"Error creating chart: {e}")
+        st.error(f"Error creating timeline chart: {e}")
         import traceback
         st.code(traceback.format_exc())
     
@@ -191,7 +231,8 @@ def main():
             'APPEARANCES': lambda x: pd.to_numeric(x, errors='coerce').fillna(0).sum(),
             'MINUTES': lambda x: pd.to_numeric(x, errors='coerce').fillna(0).sum(),
             'PPG': lambda x: pd.to_numeric(x, errors='coerce').fillna(0).mean()
-        }).reset_index().sort_values('APPEARANCES', ascending=False)
+        }).reset_index()
+        club_stats = club_stats.sort_values('APPEARANCES', ascending=False)
         
         import plotly.express as px
         fig2 = px.bar(
@@ -204,6 +245,8 @@ def main():
         st.plotly_chart(fig2, use_container_width=True)
     except Exception as e:
         st.error(f"Error creating club chart: {e}")
+        import traceback
+        st.code(traceback.format_exc())
     
     # Chart 3: Performance by Competition
     st.header("🎯 Performance by Competition")
@@ -212,7 +255,8 @@ def main():
             'MINUTES_RATIO': lambda x: pd.to_numeric(x, errors='coerce').fillna(0).mean(),
             'PPG': lambda x: pd.to_numeric(x, errors='coerce').fillna(0).mean(),
             'APPEARANCES': lambda x: pd.to_numeric(x, errors='coerce').fillna(0).sum()
-        }).reset_index().sort_values('MINUTES_RATIO', ascending=False)
+        }).reset_index()
+        comp_stats = comp_stats.sort_values('MINUTES_RATIO', ascending=False)
         
         import plotly.express as px
         fig3 = px.scatter(
@@ -227,8 +271,10 @@ def main():
         st.plotly_chart(fig3, use_container_width=True)
     except Exception as e:
         st.error(f"Error creating competition chart: {e}")
+        import traceback
+        st.code(traceback.format_exc())
     
-    # Step 51: What ML Cannot Predict - Unusual Injuries Section
+    # Step 51: What ML Cannot Predict
     st.header("🚑 What ML Cannot Predict: Unusual Injuries & Anomalies")
     st.markdown("""
     ### The Human Element in Sports Analytics
@@ -245,7 +291,7 @@ def main():
     These anomalies highlight the limitations of purely data-driven predictions in sports.
     """)
     
-    # Highlight anomalies in the data
+    # Highlight anomalies
     st.subheader("📉 Low Availability Periods")
     try:
         minutes_ratio_col = pd.to_numeric(filtered_df['MINUTES_RATIO'], errors='coerce').fillna(1.0)
@@ -254,6 +300,7 @@ def main():
         if len(low_availability) > 0:
             anomaly_df = low_availability[['SEASON', 'CLUB', 'COMPETITION', 'MINUTES_RATIO', 'PPG']].copy()
             if 'SEASON_START_YEAR' in anomaly_df.columns:
+                anomaly_df['SEASON_START_YEAR'] = pd.to_numeric(anomaly_df['SEASON_START_YEAR'], errors='coerce')
                 anomaly_df = anomaly_df.sort_values('SEASON_START_YEAR')
             else:
                 anomaly_df = anomaly_df.sort_values('SEASON')
@@ -280,10 +327,13 @@ def main():
         
         display_df = filtered_df[display_cols].copy()
         if sort_col in display_df.columns:
+            display_df[sort_col] = pd.to_numeric(display_df[sort_col], errors='coerce')
             display_df = display_df.sort_values(sort_col)
         st.dataframe(display_df, use_container_width=True, height=400)
     except Exception as e:
         st.error(f"Error displaying data table: {e}")
+        import traceback
+        st.code(traceback.format_exc())
     
     # Footer
     st.markdown("---")
